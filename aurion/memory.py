@@ -10,7 +10,7 @@ class Memory:
         self._ensure_file_exists()
 
     def _ensure_file_exists(self):
-        os.makedirs(os.path.dirname(file_path), exists_ok =True)
+        os.makedirs(os.path.dirname(self.file_path), exist_ok =True)
 
         if not os.path.exists(self.file_path):
             with open(self.file_path, "w", encoding = 'utf-8') as f:
@@ -27,8 +27,8 @@ class Memory:
         try:
             with open(self.file_path, 'r', encoding = 'utf-8') as f:
                 return json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
-                return []
+        except (json.JSONDecodeError, FileNotFoundError):
+            return []
 
     def clear(self):
         with open(self.file_path, 'w', encoding = 'utf-8') as f:

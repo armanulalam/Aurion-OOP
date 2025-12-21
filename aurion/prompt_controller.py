@@ -1,4 +1,4 @@
-class BaseController:
+class BasePrompt:
     """
     Base class defining common prompt behavior
     """
