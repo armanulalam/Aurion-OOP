@@ -75,8 +75,8 @@ git clone https://github.com/armanulalam/Aurion-OOP.git
 ### 2. Create Virtual Environment (Recommended)
 ```bash
 # Windows
-python -m venv venv
-venv\Scripts\activate
+conda create -n oopaurion python=3.9 -y
+conda activate oopaurion
 ```
 
 ### 3. Install Dependencies
