@@ -15,7 +15,7 @@ from auth import (
 
 # Page configuration
 st.set_page_config(
-    page_title="JARVIS - AI Assistant",
+    page_title="Aurion - AI Assistant",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -139,7 +139,7 @@ def create_new_conversation():
 def render_sidebar():
     """Render sidebar with conversation management"""
     with st.sidebar:
-        st.markdown("### 🤖 JARVIS Assistant")
+        st.markdown("### 🤖 Aurion Assistant")
         
         # Show user profile
         show_profile_sidebar(st.session_state.db_handler)
@@ -234,7 +234,7 @@ def render_message(role, message, timestamp=None):
     else:
         st.markdown(f"""
         <div class="assistant-message">
-            <strong>JARVIS</strong>
+            <strong>Aurion</strong>
             <p>{message}</p>
             {f'<div class="timestamp">{timestamp}</div>' if timestamp else ''}
         </div>
@@ -246,7 +246,7 @@ def render_chat_interface():
     # Header
     st.markdown("""
     <div class="chat-header">
-        <h1>🤖 JARVIS AI Assistant</h1>
+        <h1>🤖 Aurion AI Assistant</h1>
         <p>Your intelligent personal assistant powered by Gemini</p>
     </div>
     """, unsafe_allow_html=True)
@@ -309,7 +309,7 @@ def render_chat_interface():
         render_message("user", user_input, datetime.now().strftime("%I:%M %p"))
         
         # Generate response
-        with st.spinner("JARVIS is thinking..."):
+        with st.spinner("Aurion is thinking..."):
             if st.session_state.streaming:
                 # Streaming response
                 response_placeholder = st.empty()
@@ -322,7 +322,7 @@ def render_chat_interface():
                     full_response += chunk
                     response_placeholder.markdown(f"""
                     <div class="assistant-message">
-                        <strong>JARVIS</strong>
+                        <strong>Aurion</strong>
                         <p>{full_response}</p>
                     </div>
                     """, unsafe_allow_html=True)
