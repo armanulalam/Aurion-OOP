@@ -2,12 +2,20 @@ import streamlit as st
 import uuid
 from datetime import datetime
 from config.settings import Settings
-from aurion import GeminiEngine, PromptController, Memory, Assistant, VoiceHandler
+from aurion import GeminiEngine, PromptController, Memory, UserMemory, Assistant, VoiceHandler
+from database import DatabaseHandler
+from auth import (
+    show_login_page,
+    show_signup_page,
+    show_profile_sidebar,
+    check_authentication,
+    initialize_auth_state
+)
 
 
 # Page configuration
 st.set_page_config(
-    page_title="Aurion - AI Assistant",
+    page_title="JARVIS - AI Assistant",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -64,6 +72,9 @@ st.markdown("""
 
 def initialize_session_state():
     """Initialize session state variables"""
+    # Initialize authentication
+    initialize_auth_state()
+    
     if 'settings' not in st.session_state:
         st.session_state.settings = Settings()
     
@@ -73,8 +84,26 @@ def initialize_session_state():
         except:
             st.session_state.api_key = None
     
+    # Initialize database handler
+    if 'db_handler' not in st.session_state:
+        try:
+            st.session_state.db_handler = DatabaseHandler()
+        except Exception as e:
+            st.error(f"Database connection failed: {e}")
+            st.session_state.db_handler = None
+    
+    # Initialize memory based on authentication
     if 'memory' not in st.session_state:
-        st.session_state.memory = Memory()
+        # Check if user is authenticated
+        if check_authentication() and st.session_state.user:
+            # Use UserMemory for authenticated users (database-backed)
+            st.session_state.memory = UserMemory(
+                user_id=st.session_state.user['user_id'],
+                db_handler=st.session_state.db_handler
+            )
+        else:
+            # Use regular Memory for non-authenticated (temp storage)
+            st.session_state.memory = Memory()
     
     if 'assistant' not in st.session_state and st.session_state.api_key:
         engine = GeminiEngine(st.session_state.api_key)
@@ -100,6 +129,7 @@ def initialize_session_state():
 
 
 def create_new_conversation():
+    """Create a new conversation"""
     conv_id = str(uuid.uuid4())[:8]
     st.session_state.memory.create_conversation(conv_id)
     st.session_state.current_conversation_id = conv_id
@@ -107,16 +137,23 @@ def create_new_conversation():
 
 
 def render_sidebar():
+    """Render sidebar with conversation management"""
     with st.sidebar:
-        st.markdown("### 🤖 Aurion Assistant")
+        st.markdown("### 🤖 JARVIS Assistant")
+        
+        # Show user profile
+        show_profile_sidebar(st.session_state.db_handler)
+        
         st.markdown("---")
-
+        
+        # New Conversation Button
         if st.button("➕ New Conversation", use_container_width=True):
             create_new_conversation()
             st.rerun()
         
         st.markdown("---")
         
+        # Conversation List
         st.markdown("### 💬 Conversations")
         
         conversation_ids = st.session_state.memory.get_conversation_ids()
@@ -148,8 +185,10 @@ def render_sidebar():
         
         st.markdown("---")
         
+        # Settings
         st.markdown("### ⚙️ Settings")
         
+        # Role Selection
         role = st.selectbox(
             "Assistant Mode",
             options=list(PromptController.get_available_roles().keys()),
@@ -164,6 +203,7 @@ def render_sidebar():
             if 'assistant' in st.session_state:
                 st.session_state.assistant.set_role(role)
         
+        # Streaming Toggle
         st.session_state.streaming = st.checkbox(
             "⚡ Stream Responses", 
             value=st.session_state.streaming
@@ -171,6 +211,7 @@ def render_sidebar():
         
         st.markdown("---")
         
+        # Clear Current Conversation
         if st.session_state.current_conversation_id:
             if st.button("🧹 Clear Conversation", use_container_width=True):
                 st.session_state.assistant.clear_memory(
@@ -181,6 +222,7 @@ def render_sidebar():
 
 
 def render_message(role, message, timestamp=None):
+    """Render a single message"""
     if role == "user":
         st.markdown(f"""
         <div class="user-message">
@@ -192,7 +234,7 @@ def render_message(role, message, timestamp=None):
     else:
         st.markdown(f"""
         <div class="assistant-message">
-            <strong>Aurion</strong>
+            <strong>JARVIS</strong>
             <p>{message}</p>
             {f'<div class="timestamp">{timestamp}</div>' if timestamp else ''}
         </div>
@@ -200,16 +242,20 @@ def render_message(role, message, timestamp=None):
 
 
 def render_chat_interface():
+    """Render main chat interface"""
+    # Header
     st.markdown("""
     <div class="chat-header">
-        <h1>🤖 Aurion AI Assistant</h1>
+        <h1>🤖 JARVIS AI Assistant</h1>
         <p>Your intelligent personal assistant powered by Gemini</p>
     </div>
     """, unsafe_allow_html=True)
     
+    # Get current conversation
     if st.session_state.current_conversation_id is None:
         create_new_conversation()
     
+    # Display chat history
     history = st.session_state.memory.get_history(
         st.session_state.current_conversation_id
     )
@@ -230,9 +276,11 @@ def render_chat_interface():
                 time_str = None
             
             render_message(msg['role'], msg['message'], time_str)
-
+    
+    # Chat input area
     st.markdown("---")
     
+    # Create two columns for text input and voice button
     col1, col2 = st.columns([5, 1])
     
     with col1:
@@ -248,17 +296,22 @@ def render_chat_interface():
             
             if recognized_text:
                 st.session_state.voice_input_text = recognized_text
-                st.success(f"Recognized: {recognized_text}")
+                st.success(f"✅ Recognized: {recognized_text}")
                 # Set a flag to process this input
                 user_input = recognized_text
             else:
-                st.error("Could not understand the audio. Please try again.")
-                st.info("Tip: Speak clearly and ensure your microphone is working.")
+                st.error("❌ Could not understand the audio. Please try again.")
+                st.info("💡 Tip: Speak clearly and ensure your microphone is working.")
     
+    # Handle user input (from text or voice)
     if user_input:
+        # Display user message
         render_message("user", user_input, datetime.now().strftime("%I:%M %p"))
-        with st.spinner("Aurion is thinking..."):
+        
+        # Generate response
+        with st.spinner("JARVIS is thinking..."):
             if st.session_state.streaming:
+                # Streaming response
                 response_placeholder = st.empty()
                 full_response = ""
                 
@@ -269,36 +322,63 @@ def render_chat_interface():
                     full_response += chunk
                     response_placeholder.markdown(f"""
                     <div class="assistant-message">
-                        <strong>Aurion</strong>
+                        <strong>JARVIS</strong>
                         <p>{full_response}</p>
                     </div>
                     """, unsafe_allow_html=True)
             else:
+                # Regular response
                 response = st.session_state.assistant.respond(
                     user_input, 
                     st.session_state.current_conversation_id
                 )
                 render_message("assistant", response, datetime.now().strftime("%I:%M %p"))
         
+        # Clear voice input text after processing
         st.session_state.voice_input_text = None
         st.rerun()
 
 
 def main():
+    """Main application"""
     initialize_session_state()
     
-    # Check for API key
+    # Check authentication
+    if not check_authentication():
+        # Show login or signup page
+        if st.session_state.get('show_signup', False):
+            show_signup_page(st.session_state.db_handler)
+        else:
+            show_login_page(st.session_state.db_handler)
+        return
+    
+    # User is authenticated - ensure memory and assistant are initialized with user data
+    if st.session_state.user and st.session_state.db_handler:
+        # Check if memory needs to be reinitialized for the logged-in user
+        if not isinstance(st.session_state.memory, UserMemory):
+            # Reinitialize with UserMemory for this user
+            st.session_state.memory = UserMemory(
+                user_id=st.session_state.user['user_id'],
+                db_handler=st.session_state.db_handler
+            )
+            
+            # Reinitialize assistant with new memory
+            if st.session_state.api_key:
+                engine = GeminiEngine(st.session_state.api_key)
+                prompt_controller = PromptController(st.session_state.assistant_role)
+                st.session_state.assistant = Assistant(
+                    engine, prompt_controller, st.session_state.memory
+                )
+    
+    # Check for API key (only for authenticated users)
     if not st.session_state.api_key:
         st.error("⚠️ Gemini API Key not found!")
         st.markdown("""
         Please set your Gemini API key in the `.env` file:
-        ```
-        GEMINI_API_KEY=your_api_key_here
-        ```
-        Get your API key from: https://makersuite.google.com/app/apikey
         """)
         return
     
+    # Render UI for authenticated users
     render_sidebar()
     render_chat_interface()
 

@@ -1,57 +1,51 @@
+"""
+User Memory Module - Database-backed conversation storage per user
+"""
 import json
 import os
 from typing import List, Dict, Optional
 from datetime import datetime
-class Memory:
+
+
+class UserMemory:
     """
-    Manages conversation memory using a single JSON file
+    Manages conversation memory for a specific user with database persistence
     """
     
-    def __init__(self, memory_file: str = "data/memory.json"):
-        self.memory_file = memory_file
+    def __init__(self, user_id: str, db_handler=None):
+        self.user_id = user_id
+        self.db_handler = db_handler
         self.conversations: Dict[str, List[Dict]] = {}
         self.current_conversation_id: Optional[str] = None
-        self._load_memory()
+        self._load_from_database()
         
-    def _load_memory(self) -> None:
-        if os.path.exists(self.memory_file):
+    def _load_from_database(self) -> None:
+        if self.db_handler:
             try:
-                with open(self.memory_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.conversations = data.get('conversations', {})
-                    self.current_conversation_id = data.get('current_conversation_id')
+                self.conversations = self.db_handler.load_user_conversations(self.user_id)
+                print(f"✅ Loaded {len(self.conversations)} conversations for user {self.user_id}")
             except Exception as e:
-                print(f"Error loading memory: {e}")
+                print(f"Error loading from database: {e}")
                 self.conversations = {}
         else:
             self.conversations = {}
             
-    def _save_memory(self) -> None:
-        try:
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(self.memory_file), exist_ok=True)
-            
-            data = {
-                'conversations': self.conversations,
-                'current_conversation_id': self.current_conversation_id,
-                'last_updated': datetime.now().isoformat()
-            }
-            
-            with open(self.memory_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error saving memory: {e}")
+    def _save_to_database(self) -> None:
+        if self.db_handler:
+            try:
+                self.db_handler.save_user_conversations(self.user_id, self.conversations)
+            except Exception as e:
+                print(f"Error saving to database: {e}")
     
     def create_conversation(self, conversation_id: str) -> None:
         if conversation_id not in self.conversations:
             self.conversations[conversation_id] = []
         self.current_conversation_id = conversation_id
-        self._save_memory()
+        self._save_to_database()
     
     def set_current_conversation(self, conversation_id: str) -> bool:
         if conversation_id in self.conversations:
             self.current_conversation_id = conversation_id
-            self._save_memory()
             return True
         return False
     
@@ -71,7 +65,7 @@ class Memory:
             'message': message,
             'timestamp': datetime.now().isoformat()
         })
-        self._save_memory()
+        self._save_to_database()
         
     def get_history(self, conversation_id: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, str]]:
         conv_id = conversation_id or self.current_conversation_id
@@ -100,7 +94,7 @@ class Memory:
         
         if conv_id and conv_id in self.conversations:
             self.conversations[conv_id] = []
-            self._save_memory()
+            self._save_to_database()
     
     def delete_conversation(self, conversation_id: str) -> None:
         if conversation_id in self.conversations:
@@ -110,7 +104,7 @@ class Memory:
             if self.current_conversation_id == conversation_id:
                 self.current_conversation_id = None
                 
-            self._save_memory()
+            self._save_to_database()
     
     def get_all_conversations(self) -> Dict[str, List[Dict]]:
         return self.conversations
@@ -125,19 +119,7 @@ class Memory:
             return len(self.conversations[conv_id])
         return 0
     
-    def save_conversation_to_db(self, user_id: str, conversation_id: str, 
-                                conversation_data: list) -> bool:
-        try:
-            # This will be used by the database handler
-            pass
-        except Exception as e:
-            print(f"Error saving conversation: {e}")
-            return False
-    
-    def load_conversations_from_db(self, user_id: str) -> Dict[str, List[Dict]]:
-        try:
-            # This will be used by the database handler
-            return {}
-        except Exception as e:
-            print(f"Error loading conversations: {e}")
-            return {}
+    def clear_all_conversations(self) -> None:
+        self.conversations = {}
+        self.current_conversation_id = None
+        self._save_to_database()
