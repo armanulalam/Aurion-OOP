@@ -4,7 +4,7 @@ A sophisticated Personal AI Assistant built with **Gemini API**, **Object-Orient
 
 ## 🎥 Demo Video
 
-**[Insert Your Demo Video Link Here]**
+https://youtu.be/KabooJ-ubr0
 
 ---
 
